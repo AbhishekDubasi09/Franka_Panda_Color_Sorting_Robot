@@ -7,9 +7,13 @@ ros2 run pymoveit2 pick_and_place.py --ros-args -p target_color:=R
 ros2 run pymoveit2 pick_and_place.py --ros-args -p target_color:=G
 ros2 run pymoveit2 pick_and_place.py --ros-args -p target_color:=B
 
+Sort several colors in one run, in the given order:
+ros2 run pymoveit2 pick_and_place.py --ros-args -p target_colors:=RGB
+
 """
 
 from threading import Thread
+import time
 import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -28,6 +32,12 @@ class PickAndPlace(Node):
         # Parameters
         self.declare_parameter("target_color", "R")
         self.target_color = self.get_parameter("target_color").value.upper()
+
+        # Optional ordered sequence, e.g. "RGB". Overrides target_color.
+        self.declare_parameter("target_colors", "")
+        seq = str(self.get_parameter("target_colors").value).upper()
+        self.sequence = [c for c in seq if c in "RGB"] or [self.target_color]
+        self.latest = {}  # color -> (coords, receive time)
 
         self.declare_parameter("approach_offset", 0.31)
         self.approach_offset = float(
@@ -68,7 +78,8 @@ class PickAndPlace(Node):
         self.sub = self.create_subscription(
             String, "/color_coordinates", self.coords_callback, 10
         )
-        self.get_logger().info(f"Waiting for {self.target_color} from /color_coordinates...")
+        self.get_logger().info(
+            f"Waiting for {'/'.join(self.sequence)} from /color_coordinates...")
 
         # Predefined joint positions (in radians)
         self.start_joints = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, math.radians(-125.0)]
@@ -81,87 +92,96 @@ class PickAndPlace(Node):
         self.moveit2.wait_until_executed()
 
     def coords_callback(self, msg):
-        if self.already_moved:
-            return  # Ignore messages once motion starts
-
         try:
             color_id, x, y, z = msg.data.split(",")
-            color_id = color_id.strip().upper()
-
-            if color_id == self.target_color:
-                # Lock coordinates immediately
-                self.target_coords = [float(x), float(y), float(z)]
-                self.get_logger().info(
-                    f"Target {self.target_color} locked at: "
-                    f"[{self.target_coords[0]:.3f}, {self.target_coords[1]:.3f}, {self.target_coords[2]:.3f}]"
-                )
-                self.already_moved = True
-
-                # Use locked coordinates
-                pick_position = [self.target_coords[0], self.target_coords[1], self.target_coords[2] - 0.60]
-                quat_xyzw = [0.0, 1.0, 0.0, 0.0]
-
-                # --- Pick-and-place sequence ---
-
-                # 1. Move to home joint configuration
-                self.moveit2.move_to_configuration(self.home_joints)
-                self.moveit2.wait_until_executed()
-
-                # 2. Move above target (Cartesian)
-                self.moveit2.move_to_pose(position=pick_position, quat_xyzw=quat_xyzw)
-                self.moveit2.wait_until_executed()
-
-                # 3. Open gripper
-                self.gripper.open()
-                self.gripper.wait_until_executed()
-
-                # 4. Move down to approach object
-                approach_position = [
-                    pick_position[0],
-                    pick_position[1],
-                    pick_position[2] - self.approach_offset
-                ]
-
-                self.moveit2.move_to_pose(
-                    position=approach_position,
-                    quat_xyzw=quat_xyzw,
-                    cartesian=True
-                )
-                self.moveit2.wait_until_executed()
-
-                # 5. Close gripper
-                self.gripper.close()
-                self.gripper.wait_until_executed()
-
-                # 6. Lift up back to pick_position
-                # self.moveit2.move_to_pose(position=pick_position, quat_xyzw=quat_xyzw)
-                # self.moveit2.wait_until_executed()
-
-                # 7. Move to home joint configuration
-                self.moveit2.move_to_configuration(self.home_joints)
-                self.moveit2.wait_until_executed()
-
-                # 8. Move to drop joint configuration
-                self.moveit2.move_to_configuration(self.drop_joints)
-                self.moveit2.wait_until_executed()
-
-                # 9. Open gripper to release
-                self.gripper.open()
-                self.gripper.wait_until_executed()
-
-                # 10. Close gripper
-                self.gripper.close()
-                self.gripper.wait_until_executed()
-
-                # 11. Return to start joint configuration
-                self.moveit2.move_to_configuration(self.start_joints)
-                self.moveit2.wait_until_executed()
-
-                self.get_logger().info("Pick-and-place sequence complete.")
-                rclpy.shutdown()
-
+            self.latest[color_id.strip().upper()] = (
+                [float(x), float(y), float(z)], time.monotonic())
         except Exception as e:
             self.get_logger().error(f"Error parsing /color_coordinates: {e}")
+
+    def wait_for_target(self, color, max_age=1.0, timeout=60.0):
+        """Return fresh coordinates for `color`, or None on timeout."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            entry = self.latest.get(color)
+            if entry and time.monotonic() - entry[1] < max_age:
+                return entry[0]
+            time.sleep(0.1)
+        return None
+
+    def run_sequence(self):
+        for color in self.sequence:
+            coords = self.wait_for_target(color)
+            if coords is None:
+                self.get_logger().warn(f"{color} not seen, skipping.")
+                continue
+            self.target_color = color
+            self.target_coords = coords
+            self.get_logger().info(
+                f"Target {color} locked at: "
+                f"[{coords[0]:.3f}, {coords[1]:.3f}, {coords[2]:.3f}]")
+            self.pick_and_place(coords)
+            self.latest.pop(color, None)
+        self.get_logger().info("Pick-and-place sequence complete.")
+        rclpy.shutdown()
+
+    def pick_and_place(self, coords):
+        pick_position = [coords[0], coords[1], coords[2] - 0.60]
+        quat_xyzw = [0.0, 1.0, 0.0, 0.0]
+
+        # 1. Move to home joint configuration
+        self.moveit2.move_to_configuration(self.home_joints)
+        self.moveit2.wait_until_executed()
+
+        # 2. Move above target (Cartesian)
+        self.moveit2.move_to_pose(position=pick_position, quat_xyzw=quat_xyzw)
+        self.moveit2.wait_until_executed()
+
+        # 3. Open gripper
+        self.gripper.open()
+        self.gripper.wait_until_executed()
+
+        # 4. Move down to approach object
+        approach_position = [
+            pick_position[0],
+            pick_position[1],
+            pick_position[2] - self.approach_offset
+        ]
+
+        self.moveit2.move_to_pose(
+            position=approach_position,
+            quat_xyzw=quat_xyzw,
+            cartesian=True
+        )
+        self.moveit2.wait_until_executed()
+
+        # 5. Close gripper
+        self.gripper.close()
+        self.gripper.wait_until_executed()
+
+        # 6. Lift up back to pick_position
+        # self.moveit2.move_to_pose(position=pick_position, quat_xyzw=quat_xyzw)
+        # self.moveit2.wait_until_executed()
+
+        # 7. Move to home joint configuration
+        self.moveit2.move_to_configuration(self.home_joints)
+        self.moveit2.wait_until_executed()
+
+        # 8. Move to drop joint configuration
+        self.moveit2.move_to_configuration(self.drop_joints)
+        self.moveit2.wait_until_executed()
+
+        # 9. Open gripper to release
+        self.gripper.open()
+        self.gripper.wait_until_executed()
+
+        # 10. Close gripper
+        self.gripper.close()
+        self.gripper.wait_until_executed()
+
+        # 11. Return to start joint configuration
+        self.moveit2.move_to_configuration(self.start_joints)
+        self.moveit2.wait_until_executed()
 
 
 def main():
@@ -174,6 +194,7 @@ def main():
     executor_thread.start()
 
     try:
+        node.run_sequence()
         executor_thread.join()
     except KeyboardInterrupt:
         pass
