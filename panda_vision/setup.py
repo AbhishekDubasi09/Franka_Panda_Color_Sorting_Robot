@@ -25,6 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'color_detector = panda_vision.color_detector:main',
+            'color_detector_legacy = panda_vision.color_detector_legacy:main',
+            'evaluate_detectors = panda_vision.evaluate_detectors:main',
         ],
     },
 )

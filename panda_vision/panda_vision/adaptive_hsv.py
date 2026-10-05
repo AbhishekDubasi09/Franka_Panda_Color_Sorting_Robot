@@ -44,9 +44,27 @@ def segment_colors(bgr, min_area=20, hue_windows=HUE_WINDOWS):
             mask |= cv2.inRange(hsv[..., 0], lo, hi)
         mask = cv2.bitwise_and(mask, colourful.astype(np.uint8) * 255)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        n, _, stats, cents = cv2.connectedComponentsWithStats(mask)
-        found[cid] = [(float(cents[i][0]), float(cents[i][1]),
-                       int(stats[i, cv2.CC_STAT_AREA]))
-                      for i in range(1, n)
-                      if stats[i, cv2.CC_STAT_AREA] >= min_area]
+        n, labels, stats, cents = cv2.connectedComponentsWithStats(mask)
+        found[cid] = []
+        for i in range(1, n):
+            area = int(stats[i, cv2.CC_STAT_AREA])
+            if area < min_area:
+                continue
+            cx, cy = _top_face_centroid(bgr, labels == i, cents[i])
+            found[cid].append((cx, cy, area))
     return found
+
+
+def _top_face_centroid(bgr, blob, fallback):
+    """Centroid of the brightest (lit, upward-facing) part of a blob.
+
+    A box seen off-axis shows a shaded side face next to its top face;
+    averaging both biases the centroid sideways. Keeping only pixels close
+    to the blob's peak brightness isolates the top face.
+    """
+    val = bgr.max(axis=2)[blob].astype(np.float32)
+    keep = val >= 0.85 * np.percentile(val, 90)
+    if keep.sum() < 5:
+        return float(fallback[0]), float(fallback[1])
+    ys, xs = np.nonzero(blob)
+    return float(xs[keep].mean()), float(ys[keep].mean())

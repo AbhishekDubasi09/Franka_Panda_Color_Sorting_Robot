@@ -1,40 +1,84 @@
-# 🤖 Franka Panda Color Sorting Robot
+# 🎨 ChromaPick
 
-A **ROS 2-based intelligent color sorting system** powered by the **Franka Emika Panda robotic arm**. This project seamlessly integrates **OpenCV computer vision**, **MoveIt 2 motion planning**, and **Gazebo simulation** to create an autonomous pick-and-place system that detects and sorts colored objects with precision.
+**A Franka Panda that sorts coloured objects with a camera it never had to hand-tune.**
+ROS 2 · MoveIt 2 · Gazebo · OpenCV
 
----
+![ChromaPick sorting red, green and blue boxes into the bin](docs/demo.gif)
 
-## 🎥 Pick and Place Demo  
-
-https://github.com/user-attachments/assets/0813eb4e-310d-4b68-b538-3c8a857079a4
-
----
-
-## ✨ Features
-
-- 🎨 **Color Detection**: Real-time OpenCV-based vision system for Red, Green, and Blue objects
-- 🦾 **Motion Planning**: Advanced trajectory planning using MoveIt 2
-- 🎯 **Autonomous Operation**: Complete pick-and-place automation with gripper control
-- 🔄 **Dynamic Target Selection**: Switch between colors without restarting the system
-- 📊 **Visual Feedback**: Integrated RViz visualization for motion planning and execution
-- 🐳 **Docker Ready**: Pre-configured container for instant deployment
+> Full-length video: [`docs/demo.mp4`](docs/demo.mp4)
 
 ---
 
-## 🎯 What You'll Learn
+## ❓ Research question
 
-- Setting up a complete ROS 2 robotic system from scratch
-- Integrating computer vision with robotic manipulation
-- Motion planning and execution with MoveIt 2
-- Using PyMoveIt2 for high-level Python control
-- Building modular ROS 2 packages
-- Docker containerization for robotics applications
+> Can a vision-guided pick-and-place system reach millimetre-level placement accuracy **without hand-tuned
+> camera constants**, so that it keeps working when the objects move?
+
+The first version of this project turned pixels into robot coordinates with five hand-tuned numbers
+(an assumed depth of `0.1`, a `×-10` axis scale, two per-colour offsets and a `-0.60` height shift in the
+picker) plus fixed HSV colour bounds. They cancel each other out for one fixed box layout and fail for any other.
+
+## ✅ Answer: yes, in simulation
+
+ChromaPick replaces them with geometry:
+
+1. **Back-projection.** Each pixel becomes a ray through the camera centre using the intrinsics
+   and the camera pose from TF. The object position is where that ray meets the table plane
+   (`panda_vision/camera_geometry.py`). The only scene constant left is the object-top height `plane_z`.
+2. **Lighting-adaptive segmentation.** Gray-world white balance, CLAHE on brightness, a saturation floor
+   estimated per frame, and a centroid taken from the lit top face only (`panda_vision/adaptive_hsv.py`).
+3. **Self-calibration tools.** `panda_vision/table_homography.py` fits the pixel-to-table mapping from
+   correspondences with RANSAC, for setups where the camera pose is not known.
+
+### Measured result
+
+Detections were compared with Gazebo's ground truth on 31 box layouts (the original layout plus 30 random
+ones, 93 detections per method, none missed). Error is the planar distance in the robot base frame.
+
+| | Original (hand-tuned) | ChromaPick (geometric) |
+|---|---|---|
+| Mean error | 89.6 mm | **1.1 mm** |
+| Median error | 91.6 mm | **1.1 mm** |
+| 95th percentile | 163.5 mm | **1.5 mm** |
+| Worst case | 175.8 mm | **1.7 mm** |
+| On the original layout only | 0 / 6 / 6 mm (R / G / B) | 1.1 / 1.1 / 1.1 mm |
+
+The original is accurate only on the layout it was tuned for. Raw data: [`results/detector_eval.json`](results/detector_eval.json).
+Reproduce it with `ros2 run panda_vision evaluate_detectors` (see `panda_vision/panda_vision/evaluate_detectors.py`).
+
+**End to end:** the arm sorts all three colours in one run
+(`ros2 run pymoveit2 pick_and_place.py --ros-args -p target_colors:=RGB`). Tracking the boxes in Gazebo shows
+all three end up in the bin.
+
+### Limits (please read)
+
+- Simulation only. Nothing here has been validated on a physical robot or camera.
+- `plane_z` (object-top height in the base frame) is a measured scene constant, not learned.
+- One fixed camera pose and flat-topped coloured boxes were tested; clutter, occlusion and other shapes were not.
+- The 1 mm figure is the detector against ground truth. Grasp success also depends on the Gazebo contact physics.
+
+## 🚀 Quick run
+
+```bash
+# terminal 1: Gazebo + MoveIt + detector
+ros2 launch panda_bringup pick_and_place.launch.py
+# terminal 2: sort red, green and blue in order
+ros2 run pymoveit2 pick_and_place.py --ros-args -p target_colors:=RGB
+```
+
+Setup instructions (Docker or native ROS 2 Humble) follow.
+
+## 🙏 Credits
+
+This project was built by a team. Commit history preserves every contributor:
+Kumar Utkarsh, Utkarsh, Aradhy Agarwal, G2gg, Abhishek Dubasi and others. The ChromaPick vision, geometry,
+evaluation and multi-colour sorting work was added on top of the original colour-sorting pipeline.
 
 ---
 
 ## 📋 Table of Contents
 
-1. [🐳 Quick Start with Docker (Recommended)](#-quick-start-with-docker-recommended)
+1. [🐳 Quick Start with Docker](#-quick-start-with-docker-recommended)
 2. [💻 Manual Installation on Local PC](#-manual-installation-on-local-pc)
 3. [🎮 Running the Project](#-running-the-project)
 4. [⚠️ Troubleshooting](#️-troubleshooting)
@@ -379,7 +423,7 @@ cd ~/panda_ws
 
 ```bash
 cd ~/panda_ws/src
-git clone https://github.com/MechaMind-Labs/Franka_Panda_Color_Sorting_Robot.git .
+git clone https://github.com/AbhishekDubasi09/ChromaPick.git .
 ```
 
 ### 4.3 Install Package Dependencies
@@ -651,7 +695,7 @@ If you encounter issues not covered here:
    ```
 
 2. **Search existing issues:**
-   [GitHub Issues](https://github.com/MechaMind-Labs/Franka_Panda_Color_Sorting_Robot/issues)
+   [GitHub Issues](https://github.com/AbhishekDubasi09/ChromaPick/issues)
 
 3. **Create a new issue** with:
    - System info: `uname -a`, `ros2 --version`
@@ -807,7 +851,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 # 🙌 Credits & Acknowledgments
 
-**Maintained by:** [Curious-Utkarsh](https://github.com/Curious-Utkarsh)
+**Original authors:** see [Credits](#-credits)
 
 **Special Thanks:**
 - Franka Emika for the excellent Panda robot

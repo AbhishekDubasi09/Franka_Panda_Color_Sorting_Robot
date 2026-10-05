@@ -8,4 +8,6 @@ devel/
 
 # VS Code
 .vscode/
-.vscode
+.vscode__pycache__/
+*.pyc
+.pytest_cache/

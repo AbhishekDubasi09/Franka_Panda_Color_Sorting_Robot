@@ -39,6 +39,15 @@ class PickAndPlace(Node):
         self.sequence = [c for c in seq if c in "RGB"] or [self.target_color]
         self.latest = {}  # color -> (coords, receive time)
 
+        # Detector z is the true object-top height in the base frame; hover
+        # this far above it (matches the original 1.1 - 0.60 = 0.5 m hover).
+        # Set legacy_coords:=true to drive the original detector, whose z
+        # is offset by a fixed 0.60.
+        self.declare_parameter("hover_above_top", 0.384)
+        self.declare_parameter("legacy_coords", False)
+        self.hover_above_top = float(self.get_parameter("hover_above_top").value)
+        self.legacy_coords = bool(self.get_parameter("legacy_coords").value)
+
         self.declare_parameter("approach_offset", 0.31)
         self.approach_offset = float(
             self.get_parameter("approach_offset").value
@@ -126,7 +135,9 @@ class PickAndPlace(Node):
         rclpy.shutdown()
 
     def pick_and_place(self, coords):
-        pick_position = [coords[0], coords[1], coords[2] - 0.60]
+        hover_z = (coords[2] - 0.60 if self.legacy_coords
+                   else coords[2] + self.hover_above_top)
+        pick_position = [coords[0], coords[1], hover_z]
         quat_xyzw = [0.0, 1.0, 0.0, 0.0]
 
         # 1. Move to home joint configuration
@@ -194,8 +205,7 @@ def main():
     executor_thread.start()
 
     try:
-        node.run_sequence()
-        executor_thread.join()
+        node.run_sequence()  # executor thread is a daemon; exit when done
     except KeyboardInterrupt:
         pass
 

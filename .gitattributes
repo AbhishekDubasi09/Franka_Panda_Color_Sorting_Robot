@@ -1,0 +1,6 @@
+* text=auto
+*.py text eol=lf
+*.sh text eol=lf
+*.xacro text eol=lf
+*.launch.py text eol=lf
+Dockerfile text eol=lf

@@ -1,143 +1,95 @@
 #!/usr/bin/env python3
-import rclpy
-from rclpy.node import Node
-from rclpy.duration import Duration
+"""Color detector with geometric back-projection and adaptive segmentation.
+
+Publishes "<color>,<x>,<y>,<z>" on /color_coordinates, where (x, y, z) is the
+object position in the robot base frame. Unlike the original detector there
+are no hand-tuned depth, scale or per-colour offsets: each pixel is turned
+into a ray from the camera's TF pose and intersected with the table plane.
+"""
 import cv2
 import numpy as np
-from sensor_msgs.msg import Image
-from std_msgs.msg import String
-from cv_bridge import CvBridge
+import rclpy
 import tf2_ros
 import tf_transformations
+from cv_bridge import CvBridge
+from rclpy.duration import Duration
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
+
+from panda_vision import camera_geometry as cg
+from panda_vision.adaptive_hsv import segment_colors
+
 
 class ColorDetector(Node):
     def __init__(self):
         super().__init__('color_detector')
+        self.declare_parameter('base_frame', 'panda_link0')
+        self.declare_parameter('camera_frame', 'camera_link')
+        self.declare_parameter('horizontal_fov', 1.0)
+        # Height of the plane the detected pixel centroids lie on (top
+        # face of the objects) in the base frame.
+        self.declare_parameter('plane_z', 0.0)
+        self.declare_parameter('min_area', 20)
+        self.declare_parameter('show_window', True)
 
-        # Subscriber
-        self.image_sub = self.create_subscription(
-            Image, '/camera/image_raw', self.image_callback, 10)
+        self.base_frame = self.get_parameter('base_frame').value
+        self.camera_frame = self.get_parameter('camera_frame').value
+        self.fov = float(self.get_parameter('horizontal_fov').value)
+        self.plane_z = float(self.get_parameter('plane_z').value)
+        self.min_area = int(self.get_parameter('min_area').value)
+        self.show = bool(self.get_parameter('show_window').value)
 
-        # Publisher
-        self.coords_pub = self.create_publisher(String, '/color_coordinates', 10)
-
-        # OpenCV bridge
         self.bridge = CvBridge()
-
-        # TF2 setup
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self.coords_pub = self.create_publisher(String, '/color_coordinates', 10)
+        self.create_subscription(
+            Image, '/camera/image_raw', self.image_callback, 10)
+        self.get_logger().info(
+            f"Geometric color detector up (plane_z={self.plane_z:.3f} m)")
 
-        # Camera intrinsic parameters (from your SDF)
-        self.fx = 585.0
-        self.fy = 588.0
-        self.cx = 320.0
-        self.cy = 160.0
-
-        self.get_logger().info("Color Detector Node Started with TF2 lookup transform")
+    def camera_pose(self):
+        t = self.tf_buffer.lookup_transform(
+            self.base_frame, self.camera_frame, rclpy.time.Time(),
+            timeout=Duration(seconds=1.0))
+        T = tf_transformations.quaternion_matrix([
+            t.transform.rotation.x, t.transform.rotation.y,
+            t.transform.rotation.z, t.transform.rotation.w])
+        T[:3, 3] = [t.transform.translation.x, t.transform.translation.y,
+                    t.transform.translation.z]
+        return T
 
     def image_callback(self, msg):
+        frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        h, w = frame.shape[:2]
         try:
-            # Convert ROS Image -> OpenCV BGR
-            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        except Exception as e:
-            self.get_logger().error(f"Failed to convert image: {e}")
+            T = self.camera_pose()
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException) as e:
+            self.get_logger().warn(f"TF lookup failed: {e}")
             return
 
-        # Convert to HSV
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        fx, fy, cx, cy = cg.intrinsics_from_fov(w, h, self.fov)
+        for color_id, blobs in segment_colors(
+                frame, min_area=self.min_area).items():
+            for (u, v, _area) in blobs:
+                ray = cg.pixel_rays([[u, v]], fx, fy, cx, cy,
+                                    cg.R_CAM_FROM_OPTICAL_TOP_DOWN)
+                x, y, z = cg.intersect_plane(T, ray, self.plane_z)[0]
+                self.coords_pub.publish(
+                    String(data=f"{color_id},{x:.4f},{y:.4f},{z:.4f}"))
+                cv2.rectangle(frame, (int(u) - 12, int(v) - 12),
+                              (int(u) + 12, int(v) + 12), (0, 255, 255), 2)
+                cv2.putText(frame, color_id, (int(u) - 12, int(v) - 16),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-        # Define color ranges (HSV)
-        color_ranges = {
-            "R": [(0, 120, 70), (10, 255, 255)],
-            "G": [(55, 200, 200), (60, 255, 255)],
-            "B": [(90, 200, 200), (128, 255, 255)]
-        }
-
-        for color_id, (lower, upper) in color_ranges.items():
-            lower = np.array(lower)
-            upper = np.array(upper)
-            mask = cv2.inRange(hsv, lower, upper)
-
-            # Noise removal
-            mask = cv2.erode(mask, None, iterations=2)
-            mask = cv2.dilate(mask, None, iterations=2)
-
-            # Find contours
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            for cnt in contours:
-                if cv2.contourArea(cnt) > 1:  # Increased minimum area threshold
-                    x, y, w, h = cv2.boundingRect(cnt)
-                    cx_pix, cy_pix = x + w // 2, y + h // 2
-
-                    # Draw bounding box + label
-                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 255), 2)
-                    cv2.putText(frame, color_id, (x, y - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-
-                    # Convert pixel -> camera frame
-                    Z = 0.1  # Assumed depth/distance
-                    Y = (cx_pix - self.cx) * Z / self.fx * -10
-                    X = (cy_pix - self.cy) * Z / self.fy
-
-                    try:
-                        # Lookup transform camera_link -> panda_link0
-                        # Use Time(seconds=0) for latest available transform
-                        t = self.tf_buffer.lookup_transform(
-                            "panda_link0", 
-                            "camera_link", 
-                            rclpy.time.Time(),
-                            timeout=Duration(seconds=1.0))
-
-                        # Convert to numpy transform matrix
-                        trans = np.array([
-                            t.transform.translation.x,
-                            t.transform.translation.y,
-                            t.transform.translation.z
-                        ])
-                        
-                        rot = [
-                            t.transform.rotation.x,
-                            t.transform.rotation.y,
-                            t.transform.rotation.z,
-                            t.transform.rotation.w
-                        ]
-                        
-                        # Create 4x4 transformation matrix
-                        T = tf_transformations.quaternion_matrix(rot)
-                        T[:3, 3] = trans
-
-                        # Transform point from camera frame to base frame
-                        pt_cam = np.array([X, Y, Z, 1.0])
-                        pt_base = T @ pt_cam
-
-                        # Adjust X coordinate for blue and green
-                        if color_id == "B":
-                            pt_base[1] -= 0.0215
-                        elif color_id == "G":
-                            pt_base[1] += 0.02
-
-                        # Publish color ID + coordinates in panda_link0 frame
-                        msg_str = f"{color_id},{pt_base[0]:.3f},{pt_base[1]:.3f},{pt_base[2]:.3f}"
-                        self.coords_pub.publish(String(data=msg_str))
-                        self.get_logger().info(msg_str)
-                        
-                    except (tf2_ros.LookupException, 
-                            tf2_ros.ConnectivityException, 
-                            tf2_ros.ExtrapolationException) as e:
-                        self.get_logger().warn(f"TF lookup failed: {e}")
-                    except Exception as e:
-                        self.get_logger().error(f"Unexpected error in TF transform: {e}")
-
-        # Show image in window
-        try:
-            cv2.namedWindow("Color Detection", cv2.WINDOW_NORMAL)
-            cv2.resizeWindow("Color Detection", 640, 320)
-            cv2.imshow("Color Detection", frame)
-            cv2.waitKey(1)
-        except Exception as e:
-            self.get_logger().warn(f"OpenCV display error: {e}")
+        if self.show:
+            try:
+                cv2.imshow("Color Detection", frame)
+                cv2.waitKey(1)
+            except cv2.error:
+                self.show = False
 
 
 def main(args=None):
