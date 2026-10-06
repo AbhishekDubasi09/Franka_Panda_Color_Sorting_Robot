@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "ChromaPick: geometry-based vision for colour sorting with a Franka Panda"
+type: software
+version: 1.0.0
+date-released: 2026-10-06
+license: MIT
+repository-code: "https://github.com/AbhishekDubasi09/ChromaPick"
+abstract: "A ROS 2 / MoveIt 2 colour-sorting system for the Franka Panda that replaces hand-tuned camera constants with ray-plane back-projection and lighting-adaptive segmentation, reducing mean detection error from 89.6 mm to 1.1 mm in simulation."
+keywords: [ros2, moveit2, franka-panda, gazebo, opencv, pick-and-place, computer-vision]
+authors:
+  - given-names: Abhishek
+    family-names: Dubasi
+    alias: AbhishekDubasi09
+  - given-names: Kumar
+    family-names: Utkarsh
+    alias: Curious-Utkarsh
+  - given-names: Aradhy
+    family-names: Agarwal
+  - alias: G2gg

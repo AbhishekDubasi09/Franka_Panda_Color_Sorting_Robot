@@ -2,6 +2,12 @@
 
 Vision-guided colour sorting with a Franka Panda, built on ROS 2, MoveIt 2, Gazebo and OpenCV.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![ROS 2 Humble](https://img.shields.io/badge/ROS%202-Humble-22314e)
+![MoveIt 2](https://img.shields.io/badge/MoveIt-2-orange)
+![Gazebo](https://img.shields.io/badge/Gazebo-Fortress-ff6f00)
+![Python](https://img.shields.io/badge/Python-3.10-3776ab)
+
 [![ChromaPick demo: the arm sorts red, green and blue boxes into a bin](docs/demo.gif)](docs/demo.mp4)
 
 *The Panda sorts red, green and blue boxes into a bin using geometry-based detection. Click the animation for the full-quality video ([`docs/demo.mp4`](docs/demo.mp4)).*
@@ -66,6 +72,11 @@ ros2 run pymoveit2 pick_and_place.py --ros-args -p target_colors:=RGB
 ```
 
 Full setup instructions (Docker or native ROS 2 Humble) follow.
+
+## Citation
+
+If this work is useful to you, please cite it using the "Cite this repository" button on GitHub
+(see [`CITATION.cff`](CITATION.cff)).
 
 ## Credits
 
