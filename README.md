@@ -86,9 +86,11 @@ Setup instructions for Docker and for a native ROS 2 Humble install follow.
 
 ## Credits
 
-The original project was built by Kumar Utkarsh, Aradhy Agarwal, G2gg and Abhishek Dubasi. Everyone who
-committed to it appears in the commit history. The vision changes, the evaluation and the multi-colour sorting
-described above are Abhishek's. The `pymoveit2` folder is third-party code by Andrej Orsula.
+The original project is by MechaMind Labs: Kumar Utkarsh, Aradhy Agarwal and G2gg. The robot model, the simulation
+world, the MoveIt setup and the original colour detector and picker are theirs, and their commit history is
+kept in this repository. The `pymoveit2` folder is third-party code by Andrej Orsula.
+
+The vision changes, the evaluation and the multi-colour sorting described above are my work (Abhishek Dubasi).
 
 If you cite this work, GitHub's "Cite this repository" button uses [`CITATION.cff`](CITATION.cff).
 

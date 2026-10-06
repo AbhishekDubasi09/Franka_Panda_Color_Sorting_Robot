@@ -1,20 +1,20 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
+message: "If you use this software, please cite it as below, and cite the original project as well."
 title: "Franka Panda Color Sorting Robot with ChromaPick geometry-based vision"
 type: software
 version: 1.0.0
 date-released: 2026-10-06
 license: MIT
 repository-code: "https://github.com/AbhishekDubasi09/Franka_Panda_Color_Sorting_Robot"
-abstract: "A Franka Panda colour-sorting system for ROS 2 and MoveIt 2. The vision code replaces hand-tuned camera constants with ray-plane geometry and adaptive colour segmentation. In simulation, mean detection error against ground truth dropped from 89.6 mm to 1.1 mm."
+abstract: "An enhanced version of an open-source Franka Panda colour-sorting project for ROS 2 and MoveIt 2. The vision code replaces hand-tuned camera constants with ray-plane geometry and adaptive colour segmentation. In simulation, mean detection error against ground truth dropped from 89.6 mm to 1.1 mm."
 keywords: [ros2, moveit2, franka-panda, gazebo, opencv, pick-and-place, computer-vision]
 authors:
   - given-names: Abhishek
     family-names: Dubasi
     alias: AbhishekDubasi09
-  - given-names: Kumar
-    family-names: Utkarsh
-    alias: Curious-Utkarsh
-  - given-names: Aradhy
-    family-names: Agarwal
-  - alias: G2gg
+references:
+  - type: software
+    title: "Franka Panda Color Sorting Robot"
+    authors:
+      - name: "MechaMind Labs"
+    url: "https://github.com/MechaMind-Labs/Franka_Panda_Color_Sorting_Robot"
