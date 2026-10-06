@@ -1,6 +1,11 @@
-# ChromaPick
+# Franka Panda Color Sorting Robot
 
 Vision-guided colour sorting with a Franka Panda, built on ROS 2, MoveIt 2, Gazebo and OpenCV.
+This is an enhanced version of the original
+[Franka Panda Color Sorting Robot](https://github.com/MechaMind-Labs/Franka_Panda_Color_Sorting_Robot) project.
+The new **ChromaPick** vision pipeline replaces the hand-tuned camera constants with geometry, adds multi-colour
+sorting and adds a ground-truth evaluation. The untouched original is preserved at the
+[`baseline-original`](../../tree/baseline-original) tag.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![ROS 2 Humble](https://img.shields.io/badge/ROS%202-Humble-22314e)
@@ -433,7 +438,7 @@ cd ~/panda_ws
 
 ```bash
 cd ~/panda_ws/src
-git clone https://github.com/AbhishekDubasi09/ChromaPick.git .
+git clone https://github.com/AbhishekDubasi09/Franka_Panda_Color_Sorting_Robot.git .
 ```
 
 ### 4.3 Install Package Dependencies
@@ -705,7 +710,7 @@ If you encounter issues not covered here:
    ```
 
 2. **Search existing issues:**
-   [GitHub Issues](https://github.com/AbhishekDubasi09/ChromaPick/issues)
+   [GitHub Issues](https://github.com/AbhishekDubasi09/Franka_Panda_Color_Sorting_Robot/issues)
 
 3. **Create a new issue** with:
    - System info: `uname -a`, `ros2 --version`

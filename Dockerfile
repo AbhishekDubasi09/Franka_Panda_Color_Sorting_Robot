@@ -33,7 +33,7 @@ RUN rosdep update --rosdistro=humble
 # Create panda workspace and clone repo
 RUN mkdir -p $ROS_WS/src
 WORKDIR $ROS_WS/src
-RUN git clone https://github.com/AbhishekDubasi09/ChromaPick.git .
+RUN git clone https://github.com/AbhishekDubasi09/Franka_Panda_Color_Sorting_Robot.git .
 
 WORKDIR $ROS_WS
 RUN rosdep install --from-paths src -y --ignore-src --skip-keys=opencv_python --rosdistro=humble || \
