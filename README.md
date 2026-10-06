@@ -844,7 +844,8 @@ We welcome contributions from the community! Here's how you can help:
 
 # License
 
-Released under the MIT License, as declared in the package manifests.
+Released under the MIT License; see [LICENSE](LICENSE). The `pymoveit2/` directory is third-party code by
+Andrej Orsula and keeps its own BSD 3-Clause license ([pymoveit2/LICENSE](pymoveit2/LICENSE)).
 
 ---
 
