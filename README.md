@@ -1,92 +1,91 @@
-# 🎨 ChromaPick
+# ChromaPick
 
-**A Franka Panda that sorts coloured objects with a camera it never had to hand-tune.**
-ROS 2 · MoveIt 2 · Gazebo · OpenCV
+Vision-guided colour sorting with a Franka Panda, built on ROS 2, MoveIt 2, Gazebo and OpenCV.
 
-![ChromaPick sorting red, green and blue boxes into the bin](docs/demo.gif)
+[![ChromaPick demo: the arm sorts red, green and blue boxes into a bin](docs/demo.gif)](docs/demo.mp4)
 
-> Full-length video: [`docs/demo.mp4`](docs/demo.mp4)
+*The Panda sorts red, green and blue boxes into a bin using geometry-based detection. Click the animation for the full-quality video ([`docs/demo.mp4`](docs/demo.mp4)).*
 
 ---
 
-## ❓ Research question
+## Research question
 
-> Can a vision-guided pick-and-place system reach millimetre-level placement accuracy **without hand-tuned
-> camera constants**, so that it keeps working when the objects move?
+> Can a vision-guided pick-and-place system reach millimetre-level placement accuracy without hand-tuned
+> camera constants, so that it keeps working when the objects move?
 
-The first version of this project turned pixels into robot coordinates with five hand-tuned numbers
-(an assumed depth of `0.1`, a `×-10` axis scale, two per-colour offsets and a `-0.60` height shift in the
-picker) plus fixed HSV colour bounds. They cancel each other out for one fixed box layout and fail for any other.
+The first version of this project converted pixels into robot coordinates with several hand-tuned numbers:
+an assumed depth of `0.1`, a `x -10` axis scale, two per-colour offsets, a `-0.60` height shift in the picker
+and fixed HSV colour bounds. They cancel each other out for one box layout and fail for any other.
 
-## ✅ Answer: yes, in simulation
+## Approach
 
-ChromaPick replaces them with geometry:
-
-1. **Back-projection.** Each pixel becomes a ray through the camera centre using the intrinsics
-   and the camera pose from TF. The object position is where that ray meets the table plane
+1. **Back-projection.** Each pixel becomes a ray through the camera centre, using the intrinsics and the camera
+   pose from TF. The object position is where that ray meets the table plane
    (`panda_vision/camera_geometry.py`). The only scene constant left is the object-top height `plane_z`.
-2. **Lighting-adaptive segmentation.** Gray-world white balance, CLAHE on brightness, a saturation floor
-   estimated per frame, and a centroid taken from the lit top face only (`panda_vision/adaptive_hsv.py`).
-3. **Self-calibration tools.** `panda_vision/table_homography.py` fits the pixel-to-table mapping from
+2. **Lighting-adaptive segmentation.** Gray-world white balance, CLAHE on brightness, a per-frame saturation floor
+   and a centroid taken from the lit top face only (`panda_vision/adaptive_hsv.py`).
+3. **Self-calibration tooling.** `panda_vision/table_homography.py` fits the pixel-to-table mapping from
    correspondences with RANSAC, for setups where the camera pose is not known.
+4. **Multi-colour sorting.** `target_colors:=RGB` sorts several colours in one run.
 
-### Measured result
+## Results
 
-Detections were compared with Gazebo's ground truth on 31 box layouts (the original layout plus 30 random
-ones, 93 detections per method, none missed). Error is the planar distance in the robot base frame.
+Detections were compared with Gazebo ground truth on 31 box layouts (the original layout plus 30 random ones;
+93 detections per method, none missed). Error is the planar distance in the robot base frame.
 
-| | Original (hand-tuned) | ChromaPick (geometric) |
+| Metric | Original (hand-tuned) | ChromaPick (geometric) |
 |---|---|---|
 | Mean error | 89.6 mm | **1.1 mm** |
 | Median error | 91.6 mm | **1.1 mm** |
 | 95th percentile | 163.5 mm | **1.5 mm** |
 | Worst case | 175.8 mm | **1.7 mm** |
-| On the original layout only | 0 / 6 / 6 mm (R / G / B) | 1.1 / 1.1 / 1.1 mm |
+| Original layout only (R / G / B) | 0 / 6 / 6 mm | 1.1 / 1.1 / 1.1 mm |
 
-The original is accurate only on the layout it was tuned for. Raw data: [`results/detector_eval.json`](results/detector_eval.json).
-Reproduce it with `ros2 run panda_vision evaluate_detectors` (see `panda_vision/panda_vision/evaluate_detectors.py`).
+The original pipeline is accurate only on the layout it was tuned for. Raw data is in
+[`results/detector_eval.json`](results/detector_eval.json); reproduce it with
+`ros2 run panda_vision evaluate_detectors` (see `panda_vision/panda_vision/evaluate_detectors.py`).
 
-**End to end:** the arm sorts all three colours in one run
-(`ros2 run pymoveit2 pick_and_place.py --ros-args -p target_colors:=RGB`). Tracking the boxes in Gazebo shows
-all three end up in the bin.
+End to end, the arm sorted all three colours into the bin in two independent runs. Box positions were tracked in
+Gazebo to confirm the result.
 
-### Limits (please read)
+### Limitations
 
 - Simulation only. Nothing here has been validated on a physical robot or camera.
 - `plane_z` (object-top height in the base frame) is a measured scene constant, not learned.
-- One fixed camera pose and flat-topped coloured boxes were tested; clutter, occlusion and other shapes were not.
-- The 1 mm figure is the detector against ground truth. Grasp success also depends on the Gazebo contact physics.
+- One fixed camera pose and flat-topped coloured boxes were tested. Clutter, occlusion and other shapes were not.
+- The 1 mm figure is the detector against ground truth. Grasp success also depends on Gazebo contact physics.
 
-## 🚀 Quick run
+## Quick run
 
 ```bash
-# terminal 1: Gazebo + MoveIt + detector
+# Terminal 1: Gazebo, MoveIt and the detector
 ros2 launch panda_bringup pick_and_place.launch.py
-# terminal 2: sort red, green and blue in order
+
+# Terminal 2: sort red, green and blue in order
 ros2 run pymoveit2 pick_and_place.py --ros-args -p target_colors:=RGB
 ```
 
-Setup instructions (Docker or native ROS 2 Humble) follow.
+Full setup instructions (Docker or native ROS 2 Humble) follow.
 
-## 🙏 Credits
+## Credits
 
-This project was built by a team. Commit history preserves every contributor:
-Kumar Utkarsh, Utkarsh, Aradhy Agarwal, G2gg, Abhishek Dubasi and others. The ChromaPick vision, geometry,
-evaluation and multi-colour sorting work was added on top of the original colour-sorting pipeline.
-
----
-
-## 📋 Table of Contents
-
-1. [🐳 Quick Start with Docker](#-quick-start-with-docker-recommended)
-2. [💻 Manual Installation on Local PC](#-manual-installation-on-local-pc)
-3. [🎮 Running the Project](#-running-the-project)
-4. [⚠️ Troubleshooting](#️-troubleshooting)
-5. [📚 References](#-references)
+This project was built by a team. The commit history preserves every contributor: Kumar Utkarsh, Utkarsh,
+Aradhy Agarwal, G2gg and Abhishek Dubasi. The ChromaPick vision, geometry, evaluation and multi-colour sorting
+work was added on top of the original colour-sorting pipeline.
 
 ---
 
-# 🐳 Quick Start with Docker (Recommended)
+## Table of Contents
+
+1. [Quick Start with Docker](#quick-start-with-docker-recommended)
+2. [Manual Installation on Local PC](#manual-installation-on-local-pc)
+3. [Running the Project](#running-the-project)
+4. [Troubleshooting](#troubleshooting)
+5. [References](#references)
+
+---
+
+# Quick Start with Docker (Recommended)
 
 Get up and running in minutes with our pre-built Docker image! This method eliminates dependency conflicts and provides a consistent, production-ready environment.
 
@@ -99,7 +98,7 @@ Get up and running in minutes with our pre-built Docker image! This method elimi
 
 ---
 
-## 🔧 Step 1: Install Docker
+## Step 1: Install Docker
 
 ### On Ubuntu/Debian Linux:
 
@@ -147,7 +146,7 @@ newgrp docker
 ```bash
 docker run hello-world
 ```
-✅ **Success!** You should see "Hello from Docker!" message.
+**Success!** You should see "Hello from Docker!" message.
 
 ---
 
@@ -170,7 +169,7 @@ docker run hello-world
 
 ---
 
-## 🖥️ Step 2: Enable GUI Support
+## Step 2: Enable GUI Support
 
 Docker containers need permission to access your display for RViz and Gazebo visualization.
 
@@ -182,7 +181,7 @@ xhost +local:docker
 
 ---
 
-## 🚀 Step 3: Run the Docker Container
+## Step 3: Run the Docker Container
 
 Pull and start the pre-configured container with all dependencies:
 
@@ -196,18 +195,18 @@ docker run -it --rm \
 ```
 
 **Command Breakdown:**
-- `--name franka_panda_color_sorter` → Assign a friendly container name
-- `--network host` → Share host network for seamless ROS 2 communication
-- `-e DISPLAY=$DISPLAY` → Pass display variable for GUI applications
-- `-v /tmp/.X11-unix:/tmp/.X11-unix:rw` → Mount X11 socket for graphics
-- `curiousutkarsh/franka_panda_color_sorter:humble` → Pre-built Docker image
-- `bash` → Start interactive shell
+- `--name franka_panda_color_sorter`  Assign a friendly container name
+- `--network host`  Share host network for seamless ROS 2 communication
+- `-e DISPLAY=$DISPLAY`  Pass display variable for GUI applications
+- `-v /tmp/.X11-unix:/tmp/.X11-unix:rw`  Mount X11 socket for graphics
+- `curiousutkarsh/franka_panda_color_sorter:humble`  Pre-built Docker image
+- `bash`  Start interactive shell
 
-🎉 **You're now inside the Docker container!** The workspace is pre-built and ready to use.
+**You're now inside the Docker container!** The workspace is pre-built and ready to use.
 
 ---
 
-## 🎮 Step 4: Launch the System
+## Step 4: Launch the System
 
 Once inside the container, open **two terminal sessions**:
 
@@ -220,11 +219,11 @@ ros2 launch panda_bringup pick_and_place.launch.py
 ```
 
 This launches:
-- ✅ Gazebo simulation with Panda robot
-- ✅ RViz motion planning visualization
-- ✅ Camera and color detection node
-- ✅ MoveIt 2 motion planning server
-- ✅ Robot controllers
+- Gazebo simulation with Panda robot
+- RViz motion planning visualization
+- Camera and color detection node
+- MoveIt 2 motion planning server
+- Robot controllers
 
 **Wait for all nodes to initialize** (you'll see "Ready to plan" messages)
 
@@ -246,15 +245,15 @@ ros2 run pymoveit2 pick_and_place.py --ros-args -p target_color:=R
 ```
 
 **Color Options:**
-- `target_color:=R` → Sort Red objects
-- `target_color:=G` → Sort Green objects  
-- `target_color:=B` → Sort Blue objects
+- `target_color:=R`  Sort Red objects
+- `target_color:=G`  Sort Green objects  
+- `target_color:=B`  Sort Blue objects
 
-🎯 **Watch the robot detect, pick, and place objects automatically!**
+**Watch the robot detect, pick, and place objects automatically!**
 
 ---
 
-## 🔄 Step 5: Managing the Container
+## Step 5: Managing the Container
 
 ### Switch Target Color:
 
@@ -293,7 +292,7 @@ docker pull curiousutkarsh/franka_panda_color_sorter:humble
 
 ---
 
-## 🛠️ Useful Docker Commands
+## Useful Docker Commands
 
 | Command | Purpose |
 |---------|---------|
@@ -306,7 +305,7 @@ docker pull curiousutkarsh/franka_panda_color_sorter:humble
 
 ---
 
-# 💻 Manual Installation on Local PC
+# Manual Installation on Local PC
 
 If you prefer complete control or need to modify the source code, follow this comprehensive setup guide for a local installation.
 
@@ -319,7 +318,7 @@ If you prefer complete control or need to modify the source code, follow this co
 
 ---
 
-## 📦 Step 1: Install ROS 2 Humble
+## Step 1: Install ROS 2 Humble
 
 ### 1.1 Set Locale
 
@@ -376,7 +375,7 @@ rosdep update
 
 ---
 
-## 🔧 Step 2: Install MoveIt 2 and Dependencies
+## Step 2: Install MoveIt 2 and Dependencies
 
 ```bash
 sudo apt install -y \
@@ -399,7 +398,7 @@ sudo apt install -y \
 
 ---
 
-## 📥 Step 3: Install Python Dependencies
+## Step 3: Install Python Dependencies
 
 ```bash
 pip3 install --no-cache-dir \
@@ -410,7 +409,7 @@ pip3 install --no-cache-dir \
 
 ---
 
-## 🏗️ Step 4: Create and Build Workspace
+## Step 4: Create and Build Workspace
 
 ### 4.1 Create Workspace
 
@@ -452,7 +451,7 @@ echo "source ~/panda_ws/install/setup.bash" >> ~/.bashrc
 
 ---
 
-## ✅ Step 5: Verify Installation
+## Step 5: Verify Installation
 
 Test that all packages are properly installed:
 
@@ -470,7 +469,7 @@ ros2 pkg list | grep panda
 
 ---
 
-## 🎮 Running the Project
+## Running the Project
 
 ### Complete Pick-and-Place System
 
@@ -504,7 +503,7 @@ ros2 run pymoveit2 pick_and_place.py --ros-args -p target_color:=B
 
 ---
 
-## 🔍 Useful ROS 2 Commands
+## Useful ROS 2 Commands
 
 ### Monitoring and Debugging
 
@@ -549,11 +548,11 @@ ros2 launch panda_moveit moveit.launch.py
 
 ---
 
-# ⚠️ Troubleshooting
+# Troubleshooting
 
 ## Common Issues and Solutions
 
-### 🔴 Build Failures
+### Build Failures
 
 **Error:** `Package 'xyz' not found` during build
 
@@ -573,7 +572,7 @@ colcon build
 
 ---
 
-### 🔴 Gazebo Won't Start
+### Gazebo Won't Start
 
 **Error:** `Gazebo crashes` or `Segmentation fault`
 
@@ -593,7 +592,7 @@ ros2 launch panda_bringup pick_and_place.launch.py
 
 ---
 
-### 🔴 RViz Display Issues
+### RViz Display Issues
 
 **Error:** `RViz shows black screen` or crashes
 
@@ -611,7 +610,7 @@ xhost +local:docker
 
 ---
 
-### 🔴 MoveIt Planning Failures
+### MoveIt Planning Failures
 
 **Error:** `Unable to plan` or `No valid plan found`
 
@@ -627,7 +626,7 @@ xhost +local:docker
 
 ---
 
-### 🔴 Camera Not Publishing
+### Camera Not Publishing
 
 **Error:** No images on `/camera/image_raw` topic
 
@@ -637,14 +636,14 @@ xhost +local:docker
 ros2 topic list | grep camera
 
 # Verify camera in Gazebo GUI
-# View → World → Models → camera
+# View  World  Models  camera
 
 # Restart launch file
 ```
 
 ---
 
-### 🔴 Color Detection Not Working
+### Color Detection Not Working
 
 **Error:** No objects detected or wrong colors
 
@@ -659,7 +658,7 @@ ros2 topic list | grep camera
 
 ---
 
-### 🔴 Docker Container Issues
+### Docker Container Issues
 
 **Error:** `Cannot connect to display`
 
@@ -685,7 +684,7 @@ sudo systemctl restart docker
 
 ---
 
-## 🐛 Getting Help
+## Getting Help
 
 If you encounter issues not covered here:
 
@@ -704,7 +703,7 @@ If you encounter issues not covered here:
 
 ---
 
-# 📂 Project Structure
+# Project Structure
 
 ```
 panda_ws/
@@ -724,7 +723,7 @@ panda_ws/
 
 ---
 
-# 🧩 Package Overview
+# Package Overview
 
 | Package | Description | Key Files |
 |---------|-------------|-----------|
@@ -737,18 +736,18 @@ panda_ws/
 
 ---
 
-# 🚀 How It Works
+# How It Works
 
 ## System Architecture
 
 ```
-Camera Feed → Color Detection → Object Localization
-                                        ↓
+Camera Feed  Color Detection  Object Localization
+                                        
                                  Motion Planning (MoveIt 2)
-                                        ↓
+                                        
                                Trajectory Execution
-                                        ↓
-                         Pick Object → Move to Bin → Place
+                                        
+                         Pick Object  Move to Bin  Place
 ```
 
 ## Detailed Workflow
@@ -766,7 +765,7 @@ Camera Feed → Color Detection → Object Localization
 
 ---
 
-# 💡 Customization Guide
+# Customization Guide
 
 ## Adjust Color Thresholds
 
@@ -800,37 +799,37 @@ max_velocity_scaling: 0.5  # Slower = safer
 
 ---
 
-# 📚 References
+# References
 
 ## Official Documentation
-- 🌐 [ROS 2 Humble](https://docs.ros.org/en/humble/)
-- 🌐 [MoveIt 2](https://moveit.picknik.ai/humble/index.html)
-- 🌐 [Franka Emika Panda](https://frankaemika.github.io/)
-- 🌐 [PyMoveIt2](https://github.com/AndrejOrsula/pymoveit2)
-- 🌐 [Gazebo](https://gazebosim.org/)
+- [ROS 2 Humble](https://docs.ros.org/en/humble/)
+- [MoveIt 2](https://moveit.picknik.ai/humble/index.html)
+- [Franka Emika Panda](https://frankaemika.github.io/)
+- [PyMoveIt2](https://github.com/AndrejOrsula/pymoveit2)
+- [Gazebo](https://gazebosim.org/)
 
 ## Learning Resources
-- 📖 [ROS 2 Tutorials](https://docs.ros.org/en/humble/Tutorials.html)
-- 📖 [MoveIt Tutorials](https://moveit.picknik.ai/humble/doc/tutorials/tutorials.html)
-- 📖 [OpenCV Python](https://docs.opencv.org/4.x/d6/d00/tutorial_py_root.html)
+- [ROS 2 Tutorials](https://docs.ros.org/en/humble/Tutorials.html)
+- [MoveIt Tutorials](https://moveit.picknik.ai/humble/doc/tutorials/tutorials.html)
+- [OpenCV Python](https://docs.opencv.org/4.x/d6/d00/tutorial_py_root.html)
 
 ## Related Projects
-- 🔗 [franka_ros2](https://github.com/frankaemika/franka_ros2) - Official Franka ROS 2 packages
-- 🔗 [moveit2_tutorials](https://github.com/moveit/moveit2_tutorials)
-- 🔗 [ros2_control](https://control.ros.org/)
+- [franka_ros2](https://github.com/frankaemika/franka_ros2) - Official Franka ROS 2 packages
+- [moveit2_tutorials](https://github.com/moveit/moveit2_tutorials)
+- [ros2_control](https://control.ros.org/)
 
 ---
 
-# 🤝 Contributing
+# Contributing
 
 We welcome contributions from the community! Here's how you can help:
 
 ### Ways to Contribute
 
-- 🐛 **Report Bugs**: Open an issue with detailed reproduction steps
-- 💡 **Suggest Features**: Share your ideas for improvements
-- 📝 **Improve Documentation**: Fix typos or add clarifications
-- 🔧 **Submit Pull Requests**: Add new features or fix bugs
+- **Report Bugs**: Open an issue with detailed reproduction steps
+- **Suggest Features**: Share your ideas for improvements
+- **Improve Documentation**: Fix typos or add clarifications
+- **Submit Pull Requests**: Add new features or fix bugs
 
 ### Development Workflow
 
@@ -843,38 +842,13 @@ We welcome contributions from the community! Here's how you can help:
 
 ---
 
-# 📄 License
+# License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
----
-
-# 🙌 Credits & Acknowledgments
-
-**Original authors:** see [Credits](#-credits)
-
-**Special Thanks:**
-- Franka Emika for the excellent Panda robot
-- MoveIt community for motion planning framework
-- ROS 2 team for the middleware
-- All contributors and supporters
-
-**Inspired by:** Real-world industrial pick-and-place automation systems
+Released under the MIT License, as declared in the package manifests.
 
 ---
 
-# ⭐ Show Your Support
+# Acknowledgments
 
-If this project helped you learn robotics or build something amazing:
-
-- ⭐ **Star** the repository
-- 🐛 **Report** issues you encounter
-- 💡 **Suggest** improvements
-- 🤝 **Contribute** code or documentation
-- 📢 **Share** with the robotics community
-
----
-
-**Built with ❤️ for the robotics community**
-
-🚀 Happy Building! 🤖
+Authors are listed under [Credits](#credits). Thanks to Franka Emika for the Panda robot, the MoveIt community
+for the motion-planning framework and the ROS 2 team for the middleware.
