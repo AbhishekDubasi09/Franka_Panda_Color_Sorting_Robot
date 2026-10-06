@@ -6,7 +6,7 @@ version: 1.0.0
 date-released: 2026-10-06
 license: MIT
 repository-code: "https://github.com/AbhishekDubasi09/Franka_Panda_Color_Sorting_Robot"
-abstract: "A ROS 2 / MoveIt 2 colour-sorting system for the Franka Panda that replaces hand-tuned camera constants with ray-plane back-projection and lighting-adaptive segmentation, reducing mean detection error from 89.6 mm to 1.1 mm in simulation."
+abstract: "A Franka Panda colour-sorting system for ROS 2 and MoveIt 2. The vision code replaces hand-tuned camera constants with ray-plane geometry and adaptive colour segmentation. In simulation, mean detection error against ground truth dropped from 89.6 mm to 1.1 mm."
 keywords: [ros2, moveit2, franka-panda, gazebo, opencv, pick-and-place, computer-vision]
 authors:
   - given-names: Abhishek

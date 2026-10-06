@@ -2,8 +2,10 @@
 
 Issues and pull requests are welcome.
 
-- **Bugs:** open an issue with your ROS 2 distribution, Gazebo version and the exact command you ran.
-- **Changes:** fork, branch from `main`, keep pull requests focused, and add or update tests in
-  `panda_vision/test/` when you touch the vision code (`python3 -m pytest panda_vision/test/test_self_calibration.py`).
-- **Ideas that would help most:** validation on a real Panda and camera, other object shapes and
-  clutter, and a learned alternative to the fixed `plane_z`.
+If you report a bug, please include your ROS 2 distribution, your Gazebo version and the command you ran.
+
+For a pull request, a small focused change is easiest to review. If you touch the vision code, please run the
+tests first: `python3 -m pytest panda_vision/test/test_self_calibration.py`.
+
+The most useful contributions would be testing on a real Panda with a calibrated camera, other object shapes,
+and cluttered tables.

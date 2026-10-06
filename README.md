@@ -1,72 +1,78 @@
 # Franka Panda Color Sorting Robot
 
-Vision-guided colour sorting with a Franka Panda, built on ROS 2, MoveIt 2, Gazebo and OpenCV.
-This is an enhanced version of the original
-[Franka Panda Color Sorting Robot](https://github.com/MechaMind-Labs/Franka_Panda_Color_Sorting_Robot) project.
-The new **ChromaPick** vision pipeline replaces the hand-tuned camera constants with geometry, adds multi-colour
-sorting and adds a ground-truth evaluation. The untouched original is preserved at the
-[`baseline-original`](../../tree/baseline-original) tag.
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![ROS 2 Humble](https://img.shields.io/badge/ROS%202-Humble-22314e)
-![MoveIt 2](https://img.shields.io/badge/MoveIt-2-orange)
 ![Gazebo](https://img.shields.io/badge/Gazebo-Fortress-ff6f00)
-![Python](https://img.shields.io/badge/Python-3.10-3776ab)
 
-[![ChromaPick demo: the arm sorts red, green and blue boxes into a bin](docs/demo.gif)](docs/demo.mp4)
+A Franka Panda arm that finds coloured boxes with a camera and drops them in a bin. It runs on ROS 2 Humble,
+MoveIt 2 and Gazebo, with OpenCV for the vision.
 
-*The Panda sorts red, green and blue boxes into a bin using geometry-based detection. Click the animation for the full-quality video ([`docs/demo.mp4`](docs/demo.mp4)).*
+This repository is an enhanced version of the original
+[Franka Panda Color Sorting Robot](https://github.com/MechaMind-Labs/Franka_Panda_Color_Sorting_Robot).
+The robot model, the simulation world and the MoveIt setup come from that project. My changes are on the vision
+side and in how the picker is driven. I call the new vision code ChromaPick, mostly so it has a name. The
+original code is kept at the [`baseline-original`](../../tree/baseline-original) tag.
 
----
+[![The arm sorting red, green and blue boxes into the bin](docs/demo.gif)](docs/demo.mp4)
 
-## Research question
+*Three boxes sorted into the bin in one run, in simulation. Click the animation for the full video.*
 
-> Can a vision-guided pick-and-place system reach millimetre-level placement accuracy without hand-tuned
-> camera constants, so that it keeps working when the objects move?
+## What I changed
 
-The first version of this project converted pixels into robot coordinates with several hand-tuned numbers:
-an assumed depth of `0.1`, a `x -10` axis scale, two per-colour offsets, a `-0.60` height shift in the picker
-and fixed HSV colour bounds. They cancel each other out for one box layout and fail for any other.
+The original detector turned a pixel into a robot coordinate with a handful of numbers tuned by hand: a fixed
+depth of 0.1, a scale factor of -10 on one axis, small offsets for the green and blue boxes, and a -0.60 shift
+in the picker. They suit the box layout in the original demo and not much else. Move a box a few centimetres and
+the arm misses it.
 
-## Approach
+I wanted to see whether the arm could manage without tuned constants, so I replaced them with geometry:
 
-1. **Back-projection.** Each pixel becomes a ray through the camera centre, using the intrinsics and the camera
-   pose from TF. The object position is where that ray meets the table plane
-   (`panda_vision/camera_geometry.py`). The only scene constant left is the object-top height `plane_z`.
-2. **Lighting-adaptive segmentation.** Gray-world white balance, CLAHE on brightness, a per-frame saturation floor
-   and a centroid taken from the lit top face only (`panda_vision/adaptive_hsv.py`).
-3. **Calibration tool (tested on synthetic data, not used in the demo).** `panda_vision/table_homography.py` fits the pixel-to-table mapping from
-   correspondences with RANSAC, for setups where the camera pose is not known.
-4. **Multi-colour sorting.** `target_colors:=RGB` sorts several colours in one run.
+- `camera_geometry.py` turns each pixel into a ray from the camera, using the camera pose from TF, and finds
+  where that ray meets the table. The one scene constant left is the height of the box tops (`plane_z`).
+- `adaptive_hsv.py` corrects white balance and contrast before thresholding colours, so a change in lighting
+  matters less. It takes the centroid of the lit top face only, because the shaded side face of a box pulled
+  the old centroid a few millimetres off.
+- `pick_and_place.py` accepts `target_colors:=RGB`, so one run sorts several colours in order.
+- `evaluate_detectors.py` compares both detectors with the true box positions from Gazebo.
+- `table_homography.py` fits a pixel-to-table mapping from point pairs, for cases where the camera pose is not
+  known. I only tested this on synthetic data and the demo does not use it.
+
+The old detector is still in the package as `color_detector_legacy`, so the comparison can be run again.
 
 ## Results
 
-Detections were compared with Gazebo ground truth on 31 box layouts (the original layout plus 30 random ones;
-93 detections per method, none missed). Error is the planar distance in the robot base frame.
+I placed the boxes in 31 layouts (the original one plus 30 random ones) and compared each detector's output
+with the box positions Gazebo reports. Both detectors found every box. The error is the distance in the
+robot's base frame, in millimetres.
 
-| Metric | Original (hand-tuned) | ChromaPick (geometric) |
+| | Original | New |
 |---|---|---|
-| Mean error | 89.6 mm | **1.1 mm** |
-| Median error | 91.6 mm | **1.1 mm** |
-| 95th percentile | 163.5 mm | **1.5 mm** |
-| Worst case | 175.8 mm | **1.7 mm** |
-| Original layout only (R / G / B) | 0 / 6 / 6 mm | 1.1 / 1.1 / 1.1 mm |
+| Mean | 89.6 | 1.1 |
+| Median | 91.6 | 1.1 |
+| 95th percentile | 163.5 | 1.5 |
+| Worst case | 175.8 | 1.7 |
+| Original layout only (R / G / B) | 0 / 6 / 6 | 1.1 / 1.1 / 1.1 |
 
-The original pipeline is accurate only on the layout it was tuned for. Raw data is in
-[`results/detector_eval.json`](results/detector_eval.json); reproduce it with
-`ros2 run panda_vision evaluate_detectors` (see `panda_vision/panda_vision/evaluate_detectors.py`).
+The original is accurate on the layout it was tuned for, which is why its demo looks fine. The error grows
+as the boxes move away from that layout. The new detector gives about the same error everywhere I tried.
+The raw numbers are in [`results/detector_eval.json`](results/detector_eval.json), and
+`ros2 run panda_vision evaluate_detectors` repeats the test.
 
-End to end, the arm sorted all three colours into the bin in two independent runs. Box positions were tracked in
-Gazebo to confirm the result.
+These are detection errors only. I did not measure how accurately the gripper places a box. What I did check is
+that all three boxes ended up in the bin, in two full runs, by reading their positions from Gazebo afterwards.
 
-### Limitations
+## Limitations
 
-- Simulation only. Nothing here has been validated on a physical robot or camera.
-- `plane_z` (object-top height in the base frame) is a measured scene constant, not learned.
-- One fixed camera pose and flat-topped coloured boxes were tested. Clutter, occlusion and other shapes were not.
-- The 1 mm figure is the detector against ground truth. Grasp success also depends on Gazebo contact physics.
+- Everything here is simulation. I have not tried it on a real robot or camera.
+- The simulated camera has no noise or lens distortion. A real camera would need proper intrinsic calibration,
+  and I would expect larger errors.
+- `plane_z` is a number I measured in the simulation, so it is still a constant someone has to supply.
+- I tested one camera position, flat-topped boxes and an uncluttered table. Occlusion and other shapes are untested.
+- Boxes dropped into the bin bounce around for a while. I did not try to control that.
 
-## Quick run
+Next I would like to try this on a real Panda with a calibrated camera, and see whether a depth camera removes
+the need for `plane_z`.
+
+## Running it
 
 ```bash
 # Terminal 1: Gazebo, MoveIt and the detector
@@ -76,26 +82,23 @@ ros2 launch panda_bringup pick_and_place.launch.py
 ros2 run pymoveit2 pick_and_place.py --ros-args -p target_colors:=RGB
 ```
 
-Full setup instructions (Docker or native ROS 2 Humble) follow.
-
-## Citation
-
-If this work is useful to you, please cite it using the "Cite this repository" button on GitHub
-(see [`CITATION.cff`](CITATION.cff)).
+Setup instructions for Docker and for a native ROS 2 Humble install follow.
 
 ## Credits
 
-This project was built by a team. The commit history preserves every contributor: Kumar Utkarsh, Utkarsh,
-Aradhy Agarwal, G2gg and Abhishek Dubasi. The ChromaPick vision, geometry, evaluation and multi-colour sorting
-work was added on top of the original colour-sorting pipeline.
+The original project was built by Kumar Utkarsh, Aradhy Agarwal, G2gg and Abhishek Dubasi. Everyone who
+committed to it appears in the commit history. The vision changes, the evaluation and the multi-colour sorting
+described above are Abhishek's. The `pymoveit2` folder is third-party code by Andrej Orsula.
+
+If you cite this work, GitHub's "Cite this repository" button uses [`CITATION.cff`](CITATION.cff).
 
 ---
 
-## Table of Contents
+## Table of contents
 
-1. [Quick Start with Docker](#quick-start-with-docker-recommended)
-2. [Manual Installation on Local PC](#manual-installation-on-local-pc)
-3. [Running the Project](#running-the-project)
+1. [Quick start with Docker](#quick-start-with-docker-recommended)
+2. [Manual installation on a local PC](#manual-installation-on-local-pc)
+3. [Running the project](#running-the-project)
 4. [Troubleshooting](#troubleshooting)
 5. [References](#references)
 
