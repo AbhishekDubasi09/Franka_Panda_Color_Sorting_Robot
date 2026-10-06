@@ -7,7 +7,6 @@ are no hand-tuned depth, scale or per-colour offsets: each pixel is turned
 into a ray from the camera's TF pose and intersected with the table plane.
 """
 import cv2
-import numpy as np
 import rclpy
 import tf2_ros
 import tf_transformations
