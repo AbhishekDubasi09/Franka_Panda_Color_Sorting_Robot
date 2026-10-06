@@ -14,7 +14,7 @@ picker is driven, and a new simulated work cell. I call the new vision code Chro
 The original code and its original scene are kept (tag `baseline-original`, world `empty`) so the comparison
 below can be repeated.
 
-[![The arm sorting red, green and blue pucks into their bins](docs/demo.gif)](docs/demo.mp4)
+[![The arm sorting red, green and blue pucks into their bins](docs/work-cell-demo.gif)](docs/work-cell-demo.mp4)
 
 *One full run in simulation, shown at about five times real speed. Each puck goes to the bin for its colour. Click the animation for the video.*
 
