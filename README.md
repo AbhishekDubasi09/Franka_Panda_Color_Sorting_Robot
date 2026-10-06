@@ -30,7 +30,7 @@ and fixed HSV colour bounds. They cancel each other out for one box layout and f
    (`panda_vision/camera_geometry.py`). The only scene constant left is the object-top height `plane_z`.
 2. **Lighting-adaptive segmentation.** Gray-world white balance, CLAHE on brightness, a per-frame saturation floor
    and a centroid taken from the lit top face only (`panda_vision/adaptive_hsv.py`).
-3. **Self-calibration tooling.** `panda_vision/table_homography.py` fits the pixel-to-table mapping from
+3. **Calibration tool (tested on synthetic data, not used in the demo).** `panda_vision/table_homography.py` fits the pixel-to-table mapping from
    correspondences with RANSAC, for setups where the camera pose is not known.
 4. **Multi-colour sorting.** `target_colors:=RGB` sorts several colours in one run.
 
