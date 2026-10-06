@@ -6,6 +6,8 @@ object position in the robot base frame. Unlike the original detector there
 are no hand-tuned depth, scale or per-colour offsets: each pixel is turned
 into a ray from the camera's TF pose and intersected with the table plane.
 """
+import time
+
 import cv2
 import rclpy
 import tf2_ros
@@ -31,6 +33,8 @@ class ColorDetector(Node):
         self.declare_parameter('plane_z', 0.0)
         self.declare_parameter('min_area', 20)
         self.declare_parameter('show_window', True)
+        # Cap on processed frames per second; the camera runs faster than needed.
+        self.declare_parameter('max_rate_hz', 5.0)
 
         self.base_frame = self.get_parameter('base_frame').value
         self.camera_frame = self.get_parameter('camera_frame').value
@@ -38,6 +42,8 @@ class ColorDetector(Node):
         self.plane_z = float(self.get_parameter('plane_z').value)
         self.min_area = int(self.get_parameter('min_area').value)
         self.show = bool(self.get_parameter('show_window').value)
+        self.min_period = 1.0 / float(self.get_parameter('max_rate_hz').value)
+        self.last_processed = 0.0
 
         self.bridge = CvBridge()
         self.tf_buffer = tf2_ros.Buffer()
@@ -60,6 +66,10 @@ class ColorDetector(Node):
         return T
 
     def image_callback(self, msg):
+        now = time.monotonic()
+        if now - self.last_processed < self.min_period:
+            return
+        self.last_processed = now
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         h, w = frame.shape[:2]
         try:

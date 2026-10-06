@@ -7,14 +7,14 @@ separate topics:
   ros2 run panda_vision color_detector_legacy --ros-args \
       -r /color_coordinates:=/legacy_coords
   ros2 run panda_vision color_detector --ros-args \
-      -r /color_coordinates:=/geom_coords -p plane_z:=0.1158 \
+      -r /color_coordinates:=/geom_coords -p plane_z:=0.06 \
       -p show_window:=false
   ros2 run panda_vision evaluate_detectors --ros-args -p layouts:=30
 
-Each layout moves the three boxes with the Gazebo set_pose service, waits for
+Each layout moves the three pucks with the Gazebo set_pose service, waits for
 them to settle, and records the median detection per colour. Error is the
 planar (x, y) distance in the robot base frame between the detection and the
-true box centre.
+true puck centre.
 """
 import json
 import subprocess
@@ -28,19 +28,15 @@ from rclpy.duration import Duration
 from rclpy.node import Node
 from std_msgs.msg import String
 
-WORLD = "empty_world"
-# The box models carry their own link offsets; model pose = world - offset.
-LINK_OFFSET = {"R": (0.6, 0.6, 0.7), "G": (0.8, 0.6, 0.7), "B": (0.4, 0.6, 0.7)}
-MODEL = {"R": "red_box", "G": "green_box", "B": "blue_box"}
-BOX_CENTER_WORLD_Z = 0.41575  # resting height measured from Gazebo
+WORLD = "lab_world"
+MODEL = {"R": "red_puck", "G": "green_puck", "B": "blue_puck"}
+PUCK_CENTER_WORLD_Z = 0.38  # resting height on the table (top at z = 0.35)
 NOMINAL_BASE_XY = {"R": (0.6, 0.0), "G": (0.6, -0.2), "B": (0.6, 0.2)}
 
 
 def set_model_world_pose(color, wx, wy, wz):
-    ox, oy, oz = LINK_OFFSET[color]
     req = (f'name: "{MODEL[color]}", position: '
-           f'{{x: {wx - ox}, y: {wy - oy}, z: {wz - oz}}}, '
-           f'orientation: {{w: 1}}')
+           f'{{x: {wx}, y: {wy}, z: {wz}}}, orientation: {{w: 1}}')
     subprocess.run(
         ["ign", "service", "-s", f"/world/{WORLD}/set_pose",
          "--reqtype", "ignition.msgs.Pose", "--reptype",
@@ -89,7 +85,7 @@ class Evaluator(Node):
             # Centre height in the base frame is irrelevant for planar
             # error; place the box at its resting height in world.
             wx, wy, _ = (base_to_world @ [bx, by, 0.0, 1.0])[:3]
-            set_model_world_pose(c, wx, wy, BOX_CENTER_WORLD_Z)
+            set_model_world_pose(c, wx, wy, PUCK_CENTER_WORLD_Z)
             truth[c] = np.array([bx, by])
         self.spin_for(2.5)                    # settle
         for k in self.samples:

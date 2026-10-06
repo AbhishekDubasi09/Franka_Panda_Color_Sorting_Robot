@@ -22,7 +22,7 @@ def generate_launch_description():
         description="Absolute path to robot urdf file"
     )
 
-    world_name_arg = DeclareLaunchArgument(name="world_name", default_value="empty")
+    world_name_arg = DeclareLaunchArgument(name="world_name", default_value="lab")
 
     world_path = PathJoinSubstitution([
             panda_description,

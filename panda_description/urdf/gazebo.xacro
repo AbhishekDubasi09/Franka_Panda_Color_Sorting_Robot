@@ -25,4 +25,14 @@
     </xacro:unless>
   </gazebo>
 
+  <!-- Higher finger friction so pucks do not slip while being carried -->
+  <gazebo reference="panda_leftfinger">
+    <mu1>2.0</mu1>
+    <mu2>2.0</mu2>
+  </gazebo>
+  <gazebo reference="panda_rightfinger">
+    <mu1>2.0</mu1>
+    <mu2>2.0</mu2>
+  </gazebo>
+
 </robot>

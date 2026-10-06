@@ -50,7 +50,7 @@ def generate_launch_description():
         name="color_detector",
         output="screen",
         # Top-face height of the boxes in the panda_link0 frame (metres).
-        parameters=[{"plane_z": 0.1158}]
+        parameters=[{"plane_z": 0.06}]
     )
 
     # ------------------- MoveIt Color Picker Node -------------------

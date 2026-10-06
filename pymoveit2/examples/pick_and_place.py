@@ -48,6 +48,17 @@ class PickAndPlace(Node):
         self.hover_above_top = float(self.get_parameter("hover_above_top").value)
         self.legacy_coords = bool(self.get_parameter("legacy_coords").value)
 
+        # Where to release each colour, in the base frame: above its bin, with
+        # the fingertips about 8 cm over the rim.
+        self.drop_positions = {}
+        for color, default in (("R", [-0.116, -0.435, 0.27]),
+                               ("G", [-0.318, -0.318, 0.27]),
+                               ("B", [-0.435, -0.116, 0.27])):
+            self.declare_parameter(f"drop_position_{color.lower()}", default)
+            self.drop_positions[color] = [
+                float(v) for v in
+                self.get_parameter(f"drop_position_{color.lower()}").value]
+
         self.declare_parameter("approach_offset", 0.31)
         self.approach_offset = float(
             self.get_parameter("approach_offset").value
@@ -93,8 +104,6 @@ class PickAndPlace(Node):
         # Predefined joint positions (in radians)
         self.start_joints = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, math.radians(-125.0)]
         self.home_joints  = [0.0, 0.0, 0.0, math.radians(-90.0), 0.0, math.radians(92.0), math.radians(50.0)]
-        self.drop_joints  = [math.radians(-155.0), math.radians(30.0), math.radians(-20.0),
-                             math.radians(-124.0), math.radians(44.0), math.radians(163.0), math.radians(7.0)]
 
         # Move to start joint configuration
         self.moveit2.move_to_configuration(self.start_joints)
@@ -178,8 +187,9 @@ class PickAndPlace(Node):
         self.moveit2.move_to_configuration(self.home_joints)
         self.moveit2.wait_until_executed()
 
-        # 8. Move to drop joint configuration
-        self.moveit2.move_to_configuration(self.drop_joints)
+        # 8. Move above the bin for this colour
+        self.moveit2.move_to_pose(
+            position=self.drop_positions[self.target_color], quat_xyzw=quat_xyzw)
         self.moveit2.wait_until_executed()
 
         # 9. Open gripper to release
