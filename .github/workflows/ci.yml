@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  vision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install dependencies
+        run: pip install numpy opencv-python-headless pytest pyflakes
+      - name: Check for undefined names and unused code
+        run: python -m pyflakes panda_vision/panda_vision pymoveit2/examples/pick_and_place.py
+      - name: Run the vision tests
+        run: PYTHONPATH=panda_vision python -m pytest panda_vision/test/test_self_calibration.py -q
+      - name: Check the world, robot description and results parse
+        run: |
+          python - <<'PY'
+          import json
+          import xml.etree.ElementTree as ET
+          for path in ("panda_description/worlds/lab.world", "panda_description/worlds/empty.world",
+                       "panda_description/urdf/gazebo.xacro", "panda_description/urdf/sensors.xacro"):
+              ET.parse(path)
+          for path in ("results/detector_eval.json", "results/detector_eval_lab_world.json", "results/sorting_eval.json"):
+              json.load(open(path))
+          print("ok")
+          PY
