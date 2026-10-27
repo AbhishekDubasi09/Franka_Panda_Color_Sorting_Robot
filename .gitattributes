@@ -4,3 +4,4 @@
 *.xacro text eol=lf
 *.launch.py text eol=lf
 Dockerfile text eol=lf
+*.sh linguist-vendored
