@@ -1,4 +1,6 @@
-# Franka Panda Color Sorting Robot
+# ChromaPick: an Enhanced Franka Panda Color Sorting Robot
+
+*Repository: `Franka_Panda_Color_Sorting_Robot`. An enhancement of the open-source MechaMind Labs project.*
 
 [![CI](https://github.com/AbhishekDubasi09/Franka_Panda_Color_Sorting_Robot/actions/workflows/ci.yml/badge.svg)](https://github.com/AbhishekDubasi09/Franka_Panda_Color_Sorting_Robot/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
